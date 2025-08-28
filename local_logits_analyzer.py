@@ -230,13 +230,14 @@ class LocalLogitsAnalyzer:
         
         print(f"Processing {len(input_ids)} tokens with vocab size {logits.shape[-1]}...")
         
-        # Process each token position
-        for pos in tqdm(range(len(input_ids)), desc="Extracting logits"):
+        # Process each token position (skip first token as it has no previous context)
+        for pos in tqdm(range(1, len(input_ids)), desc="Extracting logits"):
             token_id = input_ids[pos].item()
             token = self.tokenizer.decode([token_id])
             
-            # Get logprobs for this position
-            position_logprobs = log_probs[pos]  # Shape: [vocab_size]
+            # CRITICAL FIX: Use logits from PREVIOUS position to get probability of CURRENT token
+            # logits[pos-1] contains predictions for position pos
+            position_logprobs = log_probs[pos - 1]  # Shape: [vocab_size]  
             token_logprob = position_logprobs[token_id].item()
             
             # Get top-k alternatives
@@ -265,7 +266,8 @@ class LocalLogitsAnalyzer:
                 "logprob": token_logprob,
                 "probability": math.exp(token_logprob),
                 "rank": rank,
-                "top_k_alternatives": alternatives
+                "top_k_alternatives": alternatives,
+                "note": "probability_based_on_previous_context"
             }
             
             # Add full vocabulary logprobs if requested
