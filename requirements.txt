@@ -18,3 +18,9 @@ tokenizers
 # Progress bars and utilities
 tqdm>=4.64.0
 numpy>=1.21.0
+
+# Unsloth for ultra-fast inference (A100 optimized)
+unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git
+xformers
+triton
+bitsandbytes

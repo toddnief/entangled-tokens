@@ -1,0 +1,54 @@
+# Unsloth-Optimized Configuration for A100
+# Ultra-fast full vocabulary logits extraction
+
+# Model settings (Unsloth optimized models)
+model_name: "unsloth/llama-2-7b-bnb-4bit"  # or "unsloth/llama-2-13b-bnb-4bit"
+backend: "unsloth"
+dtype: "float16"
+load_in_4bit: true  # 4-bit quantization for speed and memory efficiency
+max_sequence_length: 2048  # Unsloth optimized sequence length
+
+# Dataset settings
+dataset_name: "Bingsu/openwebtext_20p"
+num_samples: 100  # Start with 100 for testing
+chunk_size: 512  # Characters to process per chunk
+split: "train"
+
+# Logits extraction settings  
+top_k: 5000  # Top alternatives per position
+return_full_vocab: false  # Set to true for complete vocabulary (memory intensive)
+
+# File management settings
+output_dir: "unsloth_logits_outputs"  # Directory for results
+samples_per_file: 25  # Smaller batches for faster processing
+max_file_size_mb: 300  # Smaller files with Unsloth speed
+compress: true
+
+# Unsloth optimizations
+use_flash_attention: true  # Enable Flash Attention if available
+mixed_precision: true  # Use mixed precision for speed
+gradient_checkpointing: false  # Disable for inference speed
+
+# Performance settings
+memory_cleanup_interval: 25  # Clean memory every 25 samples
+torch_compile: false  # Experimental PyTorch 2.0 compilation
+
+# A100 specific settings
+rope_scaling: null  # Let Unsloth handle this
+use_gradient_checkpointing: false  # Inference mode
+trust_remote_code: true
+
+# Safety limits
+max_memory_usage: 0.9  # Use 90% of available GPU memory
+
+# Logging and monitoring
+verbose: true
+log_level: "INFO"
+progress_bar: true
+show_performance_stats: true
+
+# File organization
+save_config: true
+create_run_dirs: true
+save_summary: true
+include_performance_metrics: true
