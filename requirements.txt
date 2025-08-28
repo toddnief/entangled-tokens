@@ -27,5 +27,7 @@ bitsandbytes>=0.41.0
 
 # Additional Unsloth dependencies
 ninja  # For faster compilation
-flash-attn>=2.0.0  # Flash Attention (optional but recommended)
 einops>=0.6.0  # For tensor operations
+
+# Optional: Flash Attention (install separately if CUDA issues)
+# flash-attn>=2.0.0  # Commented out - can cause CUDA compilation issues
