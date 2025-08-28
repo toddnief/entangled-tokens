@@ -24,7 +24,7 @@ save_token_counts: true
 min_token_count: 5  # Minimum occurrences for reliable PMI
 
 # File management (smaller batches for Unsloth speed)
-output_dir: "unsloth_pmi_outputs"
+output_dir: "/scratch/tnief/pmi_results"
 samples_per_file: 25  # Smaller batches with Unsloth speed
 max_file_size_mb: 300
 compress: true

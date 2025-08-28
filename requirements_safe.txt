@@ -1,0 +1,27 @@
+together>=1.0.0
+python-dotenv>=1.0.0
+datasets>=2.16.0
+transformers>=4.36.0
+pyyaml>=6.0
+
+# Local model support for A100
+torch>=2.0.0
+accelerate>=0.24.0
+bitsandbytes>=0.41.0
+scipy
+safetensors
+tokenizers
+
+# Progress bars and utilities
+tqdm>=4.64.0
+numpy>=1.21.0
+
+# Unsloth for ultra-fast inference (A100 optimized) - CORE ONLY
+unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git
+xformers>=0.0.20
+triton>=2.0.0
+ninja
+einops>=0.6.0
+
+# Optional: Flash Attention (install separately if needed)
+# flash-attn>=2.0.0  # Commented out - install manually if CUDA is properly configured
