@@ -77,3 +77,8 @@ Thumbs.db
 results.json
 corpus_analysis.json
 *.output
+
+# Generated outputs and test files
+outputs/
+test_*.json
+openwebtext_*.json
