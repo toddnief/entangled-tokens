@@ -1,0 +1,58 @@
+# Unsloth + PMI Configuration for A100
+# Ultra-fast full vocabulary logits + PMI calculations with Unsloth optimizations
+
+# Model settings (Unsloth optimized)
+model_name: "unsloth/llama-2-7b-bnb-4bit"  # or "unsloth/llama-2-13b-bnb-4bit"
+backend: "unsloth"
+dtype: "float16"
+load_in_4bit: true
+max_sequence_length: 2048
+
+# Dataset settings
+dataset_name: "Bingsu/openwebtext_20p"
+num_samples: 100
+chunk_size: 512
+split: "train"
+
+# Logits extraction settings  
+top_k: 5000
+return_full_vocab: false
+
+# PMI settings
+calculate_pmi: true
+save_token_counts: true
+min_token_count: 5  # Minimum occurrences for reliable PMI
+
+# File management (smaller batches for Unsloth speed)
+output_dir: "unsloth_pmi_outputs"
+samples_per_file: 25  # Smaller batches with Unsloth speed
+max_file_size_mb: 300
+compress: true
+
+# Unsloth optimizations
+use_flash_attention: true
+mixed_precision: true
+gradient_checkpointing: false  # Disabled for inference speed
+rope_scaling: null
+
+# Performance settings
+memory_cleanup_interval: 25
+torch_compile: false
+trust_remote_code: true
+
+# PMI calculation settings
+pmi_method: "standard"
+smooth_marginals: false
+save_pmi_stats: true
+
+# Output settings
+save_config: true
+create_run_dirs: true
+save_summary: true
+include_token_stats: true
+include_performance_metrics: true
+
+# Logging
+verbose: true
+log_level: "INFO"
+progress_bar: true

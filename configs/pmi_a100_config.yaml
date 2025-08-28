@@ -1,0 +1,53 @@
+# PMI-Enhanced Configuration for A100
+# Full vocabulary logits + token frequency tracking for PMI calculations
+
+# Model settings
+model_name: "meta-llama/Llama-2-7b-hf"
+backend: "transformers"
+dtype: "float16"
+max_memory_gb: 70
+
+# Dataset settings
+dataset_name: "Bingsu/openwebtext_20p"
+num_samples: 100  # Start with 100 for testing
+chunk_size: 512
+split: "train"
+
+# Logits extraction settings  
+top_k: 5000
+return_full_vocab: false
+
+# PMI-specific settings
+calculate_pmi: true  # Enable PMI calculation
+save_token_counts: true  # Save token frequency data
+min_token_count: 5  # Minimum count needed for reliable PMI calculation
+
+# File management settings
+output_dir: "pmi_logits_outputs"
+samples_per_file: 50
+max_file_size_mb: 500
+compress: true
+
+# Performance settings
+memory_cleanup_interval: 50
+batch_size: 1
+use_cache: false
+
+# Safety limits
+max_sequence_length: 2048
+
+# PMI calculation settings
+pmi_method: "standard"  # Standard PMI calculation
+smooth_marginals: false  # Whether to smooth marginal probabilities
+save_pmi_stats: true  # Save PMI distribution statistics
+
+# Output settings
+save_config: true
+create_run_dirs: true
+save_summary: true
+include_token_stats: true  # Include detailed token frequency statistics
+
+# Logging
+verbose: true
+log_level: "INFO"
+progress_bar: true
