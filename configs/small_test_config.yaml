@@ -1,0 +1,21 @@
+# Small test configuration for quick testing
+
+# General settings
+dataset_name: "Bingsu/openwebtext_20p"
+num_samples: 10
+chunk_size: 300
+max_tokens: 50
+split: "train"
+output_dir: "outputs"
+
+# Model configurations
+models:
+  - name: "llama-3.1-8b-test"
+    model_id: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+    temperature: 0.7
+    logprobs: 5
+
+# Advanced settings
+random_seed: 42
+save_intermediate: true
+verbose: true

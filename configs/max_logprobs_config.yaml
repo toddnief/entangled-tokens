@@ -1,0 +1,23 @@
+# Configuration for maximum possible logprobs extraction
+# LIMITATION: Together.ai maximum is only 5 logprobs per position (NOT full vocabulary)
+
+# General settings
+dataset_name: "Bingsu/openwebtext_20p"
+num_samples: 1000
+chunk_size: 500
+max_tokens: 50
+split: "train"
+output_dir: "outputs"
+
+# Model configuration - using maximum logprobs=5
+models:
+  - name: "llama-3.1-70b-max-logprobs"
+    model_id: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+    temperature: 0.7
+    logprobs: 5  # MAXIMUM allowed by Together.ai
+    top_logprobs: 5  # This captures the top-5 alternatives at each position
+
+# Advanced settings
+random_seed: 42
+save_intermediate: true
+verbose: true

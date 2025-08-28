@@ -1,0 +1,43 @@
+# A100 Configuration for Full Vocabulary Logits Extraction
+# Optimized for 80GB A100 GPU
+
+# Model settings
+model_name: "meta-llama/Llama-2-7b-hf"  # Or Llama-2-13b-hf for larger model
+backend: "transformers"  # Use transformers for full logits access
+dtype: "float16"  # Use FP16 for memory efficiency
+max_memory_gb: 70  # Leave 10GB free on 80GB A100
+
+# Dataset settings
+dataset_name: "Bingsu/openwebtext_20p"
+num_samples: 1000
+chunk_size: 512  # Maximum sequence length (tokens)
+split: "train"
+
+# Logits extraction settings  
+top_k: 5000  # Top-k alternatives per position (instead of full 32k vocab)
+return_full_vocab: false  # Set to true for complete vocabulary (very large files)
+save_intermediate: true  # Save checkpoints every 10 samples
+
+# Output settings
+output_dir: "full_logits_outputs"
+save_format: "json"  # or "parquet" for better compression
+compress: true
+
+# Performance settings
+batch_size: 1  # Process one sample at a time for memory efficiency
+gradient_checkpointing: true  # Reduce memory usage
+use_cache: false  # Don't cache intermediate results
+
+# Advanced A100 optimizations
+torch_compile: false  # Enable for PyTorch 2.0+ (experimental)
+flash_attention: false  # Enable if available
+tensor_parallel: false  # For multi-GPU setup
+
+# Safety limits
+max_sequence_length: 2048  # Hard limit to prevent OOM
+memory_cleanup_interval: 10  # Clear cache every N samples
+
+# Logging
+verbose: true
+log_level: "INFO"
+progress_bar: true

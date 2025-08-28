@@ -3,3 +3,18 @@ python-dotenv>=1.0.0
 datasets>=2.16.0
 transformers>=4.36.0
 pyyaml>=6.0
+
+# Local model support for A100
+torch>=2.0.0
+accelerate>=0.24.0
+bitsandbytes>=0.41.0
+scipy
+safetensors
+tokenizers
+
+# Optional: vLLM for faster inference (A100 optimized)
+# vllm>=0.2.2
+
+# Progress bars and utilities
+tqdm>=4.64.0
+numpy>=1.21.0

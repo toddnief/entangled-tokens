@@ -1,0 +1,31 @@
+# Default configuration for OpenWebText logits extraction
+
+# General settings
+dataset_name: "Bingsu/openwebtext_20p"
+num_samples: 1000
+chunk_size: 500
+max_tokens: 50
+split: "train"
+output_dir: "outputs"
+
+# Model configurations
+models:
+  - name: "llama-3.1-8b"
+    model_id: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+    temperature: 0.7
+    logprobs: 5
+  
+  - name: "llama-3.1-70b"
+    model_id: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+    temperature: 0.7
+    logprobs: 5
+    
+  - name: "llama-3.2-3b"
+    model_id: "meta-llama/Llama-3.2-3B-Instruct-Turbo"
+    temperature: 0.7
+    logprobs: 5
+
+# Advanced settings
+random_seed: 42
+save_intermediate: true
+verbose: true
