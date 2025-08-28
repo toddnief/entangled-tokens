@@ -21,6 +21,11 @@ numpy>=1.21.0
 
 # Unsloth for ultra-fast inference (A100 optimized)
 unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git
-xformers
-triton
-bitsandbytes
+xformers>=0.0.20
+triton>=2.0.0
+bitsandbytes>=0.41.0
+
+# Additional Unsloth dependencies
+ninja  # For faster compilation
+flash-attn>=2.0.0  # Flash Attention (optional but recommended)
+einops>=0.6.0  # For tensor operations
