@@ -7,6 +7,7 @@ Provides full vocabulary logprobs using Hugging Face Transformers or vLLM
 import os
 import json
 import math
+import yaml
 import torch
 import numpy as np
 from typing import List, Dict, Any, Optional, Union
@@ -14,6 +15,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from datasets import load_dataset
 import logging
+from datetime import datetime
 from tqdm import tqdm
 
 # Optional imports - will check availability
@@ -53,7 +55,8 @@ class LocalLogitsAnalyzer:
                  device: str = "auto",
                  backend: str = "transformers",
                  max_memory_gb: Optional[float] = None,
-                 dtype: str = "float16"):
+                 dtype: str = "float16",
+                 config: Optional[Dict] = None):
         """
         Initialize local model analyzer
         
@@ -63,17 +66,27 @@ class LocalLogitsAnalyzer:
             backend: "transformers" or "vllm" 
             max_memory_gb: Maximum GPU memory to use
             dtype: Model dtype (float16, bfloat16, float32)
+            config: Optional config dictionary
         """
         self.model_name = model_name
         self.backend = backend
         self.device = device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = getattr(torch, dtype)
+        self.config = config or {}
+        
+        # File management settings
+        self.samples_per_file = self.config.get('samples_per_file', 50)  # Split files every 50 samples
+        self.max_file_size_mb = self.config.get('max_file_size_mb', 500)  # Split if file > 500MB
+        self.output_dir = Path(self.config.get('output_dir', 'full_logits_outputs'))
+        self.compress = self.config.get('compress', True)
         
         print(f"Initializing LocalLogitsAnalyzer:")
         print(f"  Model: {model_name}")
         print(f"  Backend: {backend}")
         print(f"  Device: {self.device}")
         print(f"  Dtype: {dtype}")
+        print(f"  Output dir: {self.output_dir}")
+        print(f"  Samples per file: {self.samples_per_file}")
         
         if max_memory_gb:
             print(f"  Max memory: {max_memory_gb}GB")
@@ -84,6 +97,26 @@ class LocalLogitsAnalyzer:
         self.llm = None  # For vLLM
         
         self._load_model(max_memory_gb)
+        
+    @classmethod
+    def from_config(cls, config_path: str, **overrides):
+        """Create analyzer from config file"""
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        # Apply any command-line overrides
+        for key, value in overrides.items():
+            if value is not None:
+                config[key] = value
+        
+        return cls(
+            model_name=config.get('model_name', 'meta-llama/Llama-2-7b-hf'),
+            device="auto",
+            backend=config.get('backend', 'transformers'),
+            max_memory_gb=config.get('max_memory_gb'),
+            dtype=config.get('dtype', 'float16'),
+            config=config
+        )
         
     def _load_model(self, max_memory_gb: Optional[float] = None):
         """Load model based on selected backend"""
@@ -273,19 +306,20 @@ class LocalLogitsAnalyzer:
         return math.exp(-avg_log_prob)
     
     def analyze_openwebtext(self, 
-                          dataset_name: str = "Bingsu/openwebtext_20p",
-                          num_samples: int = 100,
+                          dataset_name: Optional[str] = None,
+                          num_samples: Optional[int] = None,
                           output_path: Optional[str] = None,
-                          chunk_size: int = 512,
-                          return_full_vocab: bool = False,
-                          top_k: int = 1000) -> List[Dict[str, Any]]:
+                          chunk_size: Optional[int] = None,
+                          return_full_vocab: Optional[bool] = None,
+                          top_k: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Analyze OpenWebText dataset with full vocabulary logits
+        Uses config file settings as defaults, can be overridden by parameters
         
         Args:
             dataset_name: HuggingFace dataset name
             num_samples: Number of samples to process
-            output_path: Path to save results
+            output_path: Path to save results (deprecated - uses output_dir from config)
             chunk_size: Maximum tokens per chunk
             return_full_vocab: Whether to save full vocab logits
             top_k: Top-k alternatives to save
@@ -293,16 +327,42 @@ class LocalLogitsAnalyzer:
         Returns:
             List of analysis results
         """
+        # Use config values as defaults
+        dataset_name = dataset_name or self.config.get('dataset_name', 'Bingsu/openwebtext_20p')
+        num_samples = num_samples or self.config.get('num_samples', 100)
+        chunk_size = chunk_size or self.config.get('chunk_size', 512)
+        return_full_vocab = return_full_vocab if return_full_vocab is not None else self.config.get('return_full_vocab', False)
+        top_k = top_k or self.config.get('top_k', 1000)
+        
         print(f"Starting OpenWebText analysis...")
         print(f"  Dataset: {dataset_name}")
         print(f"  Samples: {num_samples}")
         print(f"  Chunk size: {chunk_size}")
         print(f"  Top-k alternatives: {top_k}")
         print(f"  Full vocab: {return_full_vocab}")
+        print(f"  Output dir: {self.output_dir}")
+        print(f"  Samples per file: {self.samples_per_file}")
+        
+        # Create output directory
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create run metadata
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_id = f"{self.model_name.split('/')[-1]}_{timestamp}"
+        run_dir = self.output_dir / run_id
+        run_dir.mkdir(exist_ok=True)
+        
+        # Save configuration
+        config_file = run_dir / "config.yaml"
+        with open(config_file, 'w') as f:
+            yaml.dump(self.config, f, default_flow_style=False)
         
         try:
-            dataset = load_dataset(dataset_name, split="train", streaming=True)
-            results = []
+            dataset = load_dataset(dataset_name, split=self.config.get('split', 'train'), streaming=True)
+            
+            current_batch = []
+            file_counter = 0
+            all_results = []
             
             for i, example in enumerate(tqdm(dataset.take(num_samples), desc="Processing samples", total=num_samples)):
                 text = example.get('text', '').strip()
@@ -313,7 +373,9 @@ class LocalLogitsAnalyzer:
                 if len(text) > chunk_size * 4:  # Rough character estimate
                     text = text[:chunk_size * 4]
                 
-                print(f"\nSample {i+1}/{num_samples}")
+                if i % 10 == 0:
+                    print(f"\nProcessing sample {i+1}/{num_samples}")
+                
                 analysis = self.get_full_logits(
                     text=text,
                     return_full_vocab=return_full_vocab,
@@ -323,25 +385,85 @@ class LocalLogitsAnalyzer:
                 analysis.update({
                     "dataset_name": dataset_name,
                     "sample_index": i,
-                    "original_length": len(example.get('text', ''))
+                    "original_length": len(example.get('text', '')),
+                    "run_id": run_id,
+                    "timestamp": datetime.now().isoformat()
                 })
                 
-                results.append(analysis)
+                current_batch.append(analysis)
+                all_results.append(analysis)
                 
-                # Save intermediate results periodically
-                if output_path and (i + 1) % 10 == 0:
-                    self._save_results(results, f"{output_path}_checkpoint_{i+1}.json")
+                # Check if we need to save current batch
+                should_save = (
+                    len(current_batch) >= self.samples_per_file or  # Samples limit
+                    i == num_samples - 1 or  # Last sample
+                    self._estimate_file_size_mb(current_batch) >= self.max_file_size_mb  # Size limit
+                )
+                
+                if should_save:
+                    output_file = run_dir / f"batch_{file_counter:04d}_{len(current_batch):03d}_samples.json"
+                    self._save_results(current_batch, str(output_file))
+                    
+                    print(f"  Saved batch {file_counter} with {len(current_batch)} samples to {output_file.name}")
+                    
+                    current_batch = []
+                    file_counter += 1
+                    
+                    # Clean up memory periodically
+                    if i % self.config.get('memory_cleanup_interval', 50) == 0:
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
             
-            # Save final results
-            if output_path:
-                self._save_results(results, output_path)
+            # Create summary file
+            summary = {
+                "run_id": run_id,
+                "model_name": self.model_name,
+                "dataset_name": dataset_name,
+                "total_samples": len(all_results),
+                "total_files": file_counter,
+                "samples_per_file": self.samples_per_file,
+                "config": self.config,
+                "timestamp": timestamp,
+                "files": []
+            }
             
-            return results
+            # List all created files
+            for batch_file in sorted(run_dir.glob("batch_*.json")):
+                summary["files"].append({
+                    "filename": batch_file.name,
+                    "size_mb": batch_file.stat().st_size / (1024 * 1024),
+                    "samples": int(batch_file.stem.split('_')[-2])
+                })
+            
+            summary_file = run_dir / "run_summary.json"
+            with open(summary_file, 'w') as f:
+                json.dump(summary, f, indent=2)
+            
+            print(f"\n✅ Analysis complete!")
+            print(f"  Total samples processed: {len(all_results)}")
+            print(f"  Files created: {file_counter}")
+            print(f"  Output directory: {run_dir}")
+            print(f"  Summary file: {summary_file}")
+            
+            return all_results
             
         except Exception as e:
             print(f"Error in OpenWebText analysis: {e}")
             logging.error(f"OpenWebText analysis error: {e}", exc_info=True)
             return []
+    
+    def _estimate_file_size_mb(self, results: List[Dict]) -> float:
+        """Estimate file size in MB for a list of results"""
+        if not results:
+            return 0.0
+        
+        # Sample first result to estimate average size
+        sample_json = json.dumps(results[0])
+        avg_size_per_sample = len(sample_json.encode('utf-8'))
+        
+        # Estimate total size
+        total_size_bytes = avg_size_per_sample * len(results)
+        return total_size_bytes / (1024 * 1024)
     
     def _save_results(self, results: List[Dict], output_path: str):
         """Save results to JSON file"""
@@ -367,30 +489,43 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Local model logits analyzer for A100")
-    parser.add_argument("--model", default="meta-llama/Llama-2-7b-hf", help="Model name/path")
-    parser.add_argument("--backend", choices=["transformers", "vllm"], default="transformers", help="Backend to use")
+    parser.add_argument("--config", "-c", help="Path to config YAML file")
+    parser.add_argument("--model", help="Model name/path (overrides config)")
+    parser.add_argument("--backend", choices=["transformers", "vllm"], help="Backend to use (overrides config)")
     parser.add_argument("--text", help="Text to analyze")
     parser.add_argument("--openwebtext", action="store_true", help="Analyze OpenWebText dataset")
-    parser.add_argument("--num-samples", type=int, default=100, help="Number of samples")
-    parser.add_argument("--output", help="Output file path")
-    parser.add_argument("--top-k", type=int, default=1000, help="Top-k alternatives per position")
-    parser.add_argument("--full-vocab", action="store_true", help="Save full vocabulary logits")
-    parser.add_argument("--max-memory", type=float, help="Max GPU memory in GB")
+    parser.add_argument("--num-samples", type=int, help="Number of samples (overrides config)")
+    parser.add_argument("--output", help="Output file path (deprecated - use config output_dir)")
+    parser.add_argument("--top-k", type=int, help="Top-k alternatives per position (overrides config)")
+    parser.add_argument("--full-vocab", action="store_true", help="Save full vocabulary logits (overrides config)")
+    parser.add_argument("--max-memory", type=float, help="Max GPU memory in GB (overrides config)")
     
     args = parser.parse_args()
     
     # Initialize analyzer
-    analyzer = LocalLogitsAnalyzer(
-        model_name=args.model,
-        backend=args.backend,
-        max_memory_gb=args.max_memory
-    )
+    if args.config:
+        # Load from config file with overrides
+        overrides = {
+            'model_name': args.model,
+            'backend': args.backend,
+            'num_samples': args.num_samples,
+            'top_k': args.top_k,
+            'return_full_vocab': args.full_vocab,
+            'max_memory_gb': args.max_memory
+        }
+        analyzer = LocalLogitsAnalyzer.from_config(args.config, **overrides)
+    else:
+        # Use command line arguments
+        analyzer = LocalLogitsAnalyzer(
+            model_name=args.model or "meta-llama/Llama-2-7b-hf",
+            backend=args.backend or "transformers",
+            max_memory_gb=args.max_memory
+        )
     
     if args.openwebtext:
         # Analyze OpenWebText
         results = analyzer.analyze_openwebtext(
             num_samples=args.num_samples,
-            output_path=args.output,
             return_full_vocab=args.full_vocab,
             top_k=args.top_k
         )
@@ -400,8 +535,8 @@ def main():
         # Analyze single text
         result = analyzer.get_full_logits(
             text=args.text,
-            return_full_vocab=args.full_vocab,
-            top_k=args.top_k
+            return_full_vocab=args.full_vocab or False,
+            top_k=args.top_k or 1000
         )
         
         print(f"\nResults for: '{args.text}'")
@@ -418,6 +553,7 @@ def main():
     
     else:
         print("Please specify either --text or --openwebtext")
+        print("Example with config: python local_logits_analyzer.py --config configs/a100_full_logits_config.yaml --openwebtext")
 
 
 if __name__ == "__main__":
